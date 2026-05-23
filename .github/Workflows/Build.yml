@@ -1,0 +1,464 @@
+name: Build Flow Clone Extension
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  release:
+    types: [ published ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create extension directory structure
+        run: |
+          mkdir -p build/FlowClone/CSXS
+          mkdir -p build/FlowClone/client/css
+          mkdir -p build/FlowClone/client/js
+          mkdir -p build/FlowClone/host
+
+      - name: Write manifest.xml
+        run: |
+          cat > build/FlowClone/CSXS/manifest.xml << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <ExtensionManifest Version="6.0" ExtensionBundleId="com.flowclone.easing" ExtensionBundleVersion="1.0.0"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+              <ExtensionList>
+                  <Extension Id="com.flowclone.easing.panel" Version="1.0.0" />
+              </ExtensionList>
+              <ExecutionEnvironment>
+                  <HostList>
+                      <Host Name="AEFT" Version="[14.0,14.9]" />
+                  </HostList>
+                  <LocaleList>
+                      <Locale Code="All" />
+                  </LocaleList>
+                  <RequiredRuntimeList>
+                      <RequiredRuntime Name="CSXS" Version="6.0" />
+                  </RequiredRuntimeList>
+              </ExecutionEnvironment>
+              <DispatchInfoList>
+                  <Extension Id="com.flowclone.easing.panel">
+                      <DispatchInfo>
+                          <Resources>
+                              <MainPath>./client/index.html</MainPath>
+                              <ScriptPath>./host/aeFunctions.jsx</ScriptPath>
+                          </Resources>
+                          <Lifecycle>
+                              <AutoVisible>true</AutoVisible>
+                          </Lifecycle>
+                          <UI>
+                              <Type>Panel</Type>
+                              <Menu>Flow Clone</Menu>
+                              <Geometry>
+                                  <Size>
+                                      <Height>480</Height>
+                                      <Width>320</Width>
+                                  </Size>
+                              </Geometry>
+                          </UI>
+                      </DispatchInfo>
+                  </Extension>
+              </DispatchInfoList>
+          </ExtensionManifest>
+          EOF
+
+      - name: Write .debug file
+        run: touch build/FlowClone/.debug
+
+      - name: Write index.html
+        run: |
+          cat > build/FlowClone/client/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <meta charset="utf-8">
+              <title>Flow Clone</title>
+              <link rel="stylesheet" href="css/style.css">
+              <script src="js/CSInterface.js"></script>
+              <script src="js/main.js"></script>
+          </head>
+          <body>
+              <div id="panel">
+                  <h2>Easing Curves</h2>
+                  <canvas id="graphCanvas" width="300" height="200"></canvas>
+                  <div class="influence-group">
+                      <label for="influenceSlider">Influence</label>
+                      <input type="range" id="influenceSlider" min="0" max="100" value="33">
+                      <span id="influenceLabel">33%</span>
+                  </div>
+                  <div class="presets">
+                      <button id="btn-easeInOut">Ease In-Out</button>
+                      <button id="btn-easeIn">Ease In</button>
+                      <button id="btn-easeOut">Ease Out</button>
+                      <button id="btn-linear">Linear</button>
+                  </div>
+                  <button id="btn-apply" class="apply-btn">APPLY TO SELECTED KEYS</button>
+                  <div id="status" class="status"></div>
+              </div>
+          </body>
+          </html>
+          EOF
+
+      - name: Write style.css
+        run: |
+          cat > build/FlowClone/client/css/style.css << 'EOF'
+          body {
+              font-family: 'Segoe UI', Tahoma, sans-serif;
+              margin: 10px;
+              background: #2d2d2d;
+              color: #ccc;
+          }
+          h2 {
+              color: #fff;
+              font-size: 16px;
+              margin-top: 0;
+              text-align: center;
+          }
+          canvas {
+              display: block;
+              margin: 10px auto;
+              background: #1a1a1a;
+              border: 1px solid #555;
+          }
+          .influence-group {
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              margin-bottom: 15px;
+          }
+          .influence-group label {
+              min-width: 60px;
+              font-size: 12px;
+          }
+          #influenceSlider {
+              flex: 1;
+          }
+          .presets {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 6px;
+              margin-bottom: 15px;
+          }
+          .presets button, .apply-btn {
+              padding: 8px;
+              background: #444;
+              border: none;
+              color: #ddd;
+              font-size: 13px;
+              cursor: pointer;
+              border-radius: 3px;
+          }
+          .presets button:hover, .apply-btn:hover {
+              background: #666;
+          }
+          .apply-btn {
+              width: 100%;
+              background: #0e639c;
+              font-weight: bold;
+              margin-top: 5px;
+          }
+          .apply-btn:hover {
+              background: #1177bb;
+          }
+          .status {
+              margin-top: 10px;
+              font-size: 11px;
+              color: #aaa;
+              min-height: 16px;
+              text-align: center;
+          }
+          EOF
+
+      - name: Write CSInterface.js (minimal)
+        run: |
+          cat > build/FlowClone/client/js/CSInterface.js << 'EOF'
+          // Minimal CSInterface implementation for CEP 6
+          var CSInterface = (function() {
+              function CSInterface() {
+                  this.eventListeners = {};
+              }
+
+              CSInterface.prototype.evalScript = function(script, callback) {
+                  if (window.cep) {
+                      window.cep.evalScript(script, callback);
+                  } else {
+                      console.log("CEP engine not available");
+                      if (callback) {
+                          callback("Error: CEP not available");
+                      }
+                  }
+              };
+
+              CSInterface.prototype.addEventListener = function(type, listener) {
+                  if (!this.eventListeners[type]) {
+                      this.eventListeners[type] = [];
+                  }
+                  this.eventListeners[type].push(listener);
+              };
+
+              CSInterface.prototype.dispatchEvent = function(event) {
+                  var listeners = this.eventListeners[event.type];
+                  if (listeners) {
+                      for (var i = 0; i < listeners.length; i++) {
+                          listeners[i](event);
+                      }
+                  }
+              };
+
+              return CSInterface;
+          })();
+          EOF
+
+      - name: Write main.js (panel logic)
+        run: |
+          cat > build/FlowClone/client/js/main.js << 'EOF'
+          (function() {
+              var csInterface = new CSInterface();
+              var canvas = document.getElementById('graphCanvas');
+              var ctx = canvas.getContext('2d');
+              var influenceSlider = document.getElementById('influenceSlider');
+              var influenceLabel = document.getElementById('influenceLabel');
+              var statusDiv = document.getElementById('status');
+              var currentEaseType = 'easeInOut';
+
+              // Predefined cubic bezier parameters (x1,y1,x2,y2) for CSS-like easing
+              var presets = {
+                  easeInOut: [0.42, 0, 0.58, 1],
+                  easeIn:     [0.42, 0, 1, 1],
+                  easeOut:    [0, 0, 0.58, 1],
+                  linear:     [0, 0, 1, 1]
+              };
+
+              // Cubic Bezier evaluation
+              function cubicBezier(t, p0, p1, p2, p3) {
+                  var mt = 1 - t;
+                  return mt*mt*mt*p0 + 3*mt*mt*t*p1 + 3*mt*t*t*p2 + t*t*t*p3;
+              }
+
+              // Draw graph on canvas
+              function drawGraph(easeType, influence) {
+                  ctx.clearRect(0, 0, canvas.width, canvas.height);
+                  var w = canvas.width;
+                  var h = canvas.height;
+                  var margin = 20;
+
+                  // Draw grid
+                  ctx.strokeStyle = '#444';
+                  ctx.lineWidth = 0.5;
+                  for (var i = 0; i <= 4; i++) {
+                      var y = margin + i * ((h - 2*margin) / 4);
+                      ctx.beginPath();
+                      ctx.moveTo(margin, y);
+                      ctx.lineTo(w - margin, y);
+                      ctx.stroke();
+                      var x = margin + i * ((w - 2*margin) / 4);
+                      ctx.beginPath();
+                      ctx.moveTo(x, margin);
+                      ctx.lineTo(x, h - margin);
+                      ctx.stroke();
+                  }
+
+                  // Draw bezier curve
+                  var bez = presets[easeType];
+                  if (!bez) bez = presets.easeInOut;
+
+                  // Adjust curve based on influence (for in/out we move the control points)
+                  var inf = influence / 100;
+                  var cp1x = bez[0];
+                  var cp1y = bez[1];
+                  var cp2x = bez[2];
+                  var cp2y = bez[3];
+
+                  if (easeType === 'easeInOut') {
+                      cp1x = inf;
+                      cp2x = 1 - inf;
+                  } else if (easeType === 'easeIn') {
+                      cp1x = inf;
+                      cp2x = 1;
+                  } else if (easeType === 'easeOut') {
+                      cp1x = 0;
+                      cp2x = 1 - inf;
+                  }
+
+                  // Map to canvas coordinates
+                  var p0x = margin;
+                  var p0y = h - margin;
+                  var p3x = w - margin;
+                  var p3y = margin;
+                  var p1x = margin + cp1x * (w - 2*margin);
+                  var p1y = h - margin - cp1y * (h - 2*margin);
+                  var p2x = margin + cp2x * (w - 2*margin);
+                  var p2y = h - margin - cp2y * (h - 2*margin);
+
+                  // Draw curve
+                  ctx.beginPath();
+                  ctx.moveTo(p0x, p0y);
+                  ctx.bezierCurveTo(p1x, p1y, p2x, p2y, p3x, p3y);
+                  ctx.strokeStyle = '#ff9f1c';
+                  ctx.lineWidth = 2;
+                  ctx.stroke();
+
+                  // Draw control points
+                  ctx.fillStyle = '#ff9f1c';
+                  ctx.beginPath();
+                  ctx.arc(p1x, p1y, 3, 0, 2*Math.PI);
+                  ctx.arc(p2x, p2y, 3, 0, 2*Math.PI);
+                  ctx.fill();
+              }
+
+              // Update UI when preset or influence changes
+              function updateGraph() {
+                  influenceLabel.textContent = influenceSlider.value + '%';
+                  drawGraph(currentEaseType, parseInt(influenceSlider.value, 10));
+              }
+
+              // Bind preset buttons
+              document.getElementById('btn-easeInOut').addEventListener('click', function() {
+                  currentEaseType = 'easeInOut';
+                  updateGraph();
+                  setStatus('Ease In-Out selected');
+              });
+              document.getElementById('btn-easeIn').addEventListener('click', function() {
+                  currentEaseType = 'easeIn';
+                  updateGraph();
+                  setStatus('Ease In selected');
+              });
+              document.getElementById('btn-easeOut').addEventListener('click', function() {
+                  currentEaseType = 'easeOut';
+                  updateGraph();
+                  setStatus('Ease Out selected');
+              });
+              document.getElementById('btn-linear').addEventListener('click', function() {
+                  currentEaseType = 'linear';
+                  updateGraph();
+                  setStatus('Linear (reset) selected');
+              });
+
+              influenceSlider.addEventListener('input', updateGraph);
+
+              // Apply button
+              document.getElementById('btn-apply').addEventListener('click', function() {
+                  var influence = parseInt(influenceSlider.value, 10);
+                  var script = 'applyEasingToSelectedKeys("' + currentEaseType + '", ' + influence + ');';
+                  setStatus('Applying ' + currentEaseType + '...');
+                  csInterface.evalScript(script, function(result) {
+                      if (result) {
+                          setStatus(result);
+                      } else {
+                          setStatus('Applied successfully.');
+                      }
+                  });
+              });
+
+              function setStatus(msg) {
+                  statusDiv.textContent = msg;
+              }
+
+              // Initial draw
+              updateGraph();
+          })();
+          EOF
+
+      - name: Write aeFunctions.jsx
+        run: |
+          cat > build/FlowClone/host/aeFunctions.jsx << 'EOF'
+          // aeFunctions.jsx - ExtendScript for After Effects CC 2017
+          // Called from panel via evalScript
+
+          function applyEasingToSelectedKeys(easeType, influence) {
+              var comp = app.project.activeItem;
+              if (!comp || !(comp instanceof CompItem)) {
+                  return "Please select an active composition.";
+              }
+
+              var layers = comp.selectedLayers;
+              if (layers.length === 0) {
+                  return "Please select at least one layer.";
+              }
+
+              var foundKeys = false;
+
+              for (var i = 0; i < layers.length; i++) {
+                  var layer = layers[i];
+                  var props = layer.selectedProperties;
+
+                  if (!props || props.length === 0) {
+                      continue;
+                  }
+
+                  for (var j = 0; j < props.length; j++) {
+                      var prop = props[j];
+                      if (!prop.canVaryOverTime || prop.numKeys === 0) {
+                          continue;
+                      }
+
+                      var selectedKeys = prop.selectedKeys;
+                      if (!selectedKeys || selectedKeys.length === 0) {
+                          // If no keyframe specifically selected, fall back to all keyframes? 
+                          // We'll only process if keys are selected.
+                          continue;
+                      }
+
+                      foundKeys = true;
+                      var inf = influence / 100;
+
+                      for (var k = 0; k < selectedKeys.length; k++) {
+                          var keyIndex = selectedKeys[k];
+                          var easeIn = null;
+                          var easeOut = null;
+
+                          if (easeType === "linear") {
+                              easeIn = new KeyframeEase(0, 1/3);
+                              easeOut = new KeyframeEase(0, 1/3);
+                          } else if (easeType === "easeInOut") {
+                              // Standard ease in-out
+                              easeIn = new KeyframeEase(inf, 1/3);
+                              easeOut = new KeyframeEase(inf, 1/3);
+                          } else if (easeType === "easeIn") {
+                              easeIn = new KeyframeEase(inf, 1/3);
+                              easeOut = new KeyframeEase(0, 1/3);
+                          } else if (easeType === "easeOut") {
+                              easeIn = new KeyframeEase(0, 1/3);
+                              easeOut = new KeyframeEase(inf, 1/3);
+                          }
+
+                          if (easeIn && easeOut) {
+                              prop.setTemporalEaseAtKey(keyIndex, [easeIn], [easeOut]);
+                          }
+                      }
+                  }
+              }
+
+              if (!foundKeys) {
+                  return "No selected keyframes found. Please select keyframes in the timeline.";
+              }
+
+              return "Easing applied: " + easeType + " (" + influence + "%)";
+          }
+          EOF
+
+      - name: Package extension as ZIP
+        run: |
+          cd build
+          zip -r ../FlowClone-Extension.zip FlowClone
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlowClone-Extension
+          path: FlowClone-Extension.zip
+
+      - name: Upload to Release (if triggered by release)
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: FlowClone-Extension.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
